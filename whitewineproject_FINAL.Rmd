@@ -1,0 +1,1055 @@
+
+EXPLORING A DATASET - WHITE WINE 
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# libraries needed
+library(ggplot2)
+library(GGally)
+library(scales)
+library(gridExtra)
+library(RColorBrewer)
+library (corrplot)
+
+library(ggthemes)
+theme_set(theme_economist())
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# import the dataset
+whitewine <- read.csv('wineQualityWhites.csv')
+```
+
+
+
+## INTRODUCTION TO DATASET
+This report explores a datset containing an expert quality assessment and chemical composition data (11 variables) for 4,898 white wines (all Portuguese 'Vinho Verde').
+
+# Univariate Plots Section
+
+```{r echo=FALSE, summarise_data}
+# print out summary information for the whitewine data
+print('whitewine dataframe')
+str(whitewine)
+writeLines('\n\n')
+summary(whitewine)
+```
+
+
+Preliminary assessment of the data suggests that the quality score may often be usefully treated as a factor variable, as it only takes integer scores (and only scores from 3-9 are seen - so it is effectively a 6 point scale fo this dataset). An additional variable (quality.factor) is introduced for when a factor scale is more useful.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+whitewine$quality.factor <- factor(whitewine$quality)
+
+# histrogram of quality.factor scores
+ggplot(whitewine, aes(x=quality.factor)) +
+  geom_histogram(stat='count') 
+```
+
+A quick view shows that quality scores range from 3-8, with the majority between 5-7. Scores show a relatively normal distribution. It is also worth noting that there are very few wines with very high or low quality scores of 3 (20 wines) or 9 (5 wines).
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, sugar_plot}
+# histrograms of residual sugar on normal and log_10 axis 
+p1 = ggplot(whitewine, aes(x=residual.sugar)) +
+  geom_histogram(bins = 75)
+
+p2 = p1 + scale_x_log10(breaks = c(1,2,3,10,20,30)) + 
+  geom_vline(aes(xintercept = 1.3), colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = 10), colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = 3), colour="orange", linetype = 20)
+
+#arrange plots in grid
+grid.arrange(p1,p2, ncol=1)
+
+```
+
+Residual sugar, when expanded to a log_10 scale, shows a bimodal distribution, with peaks at c. 1.3 and 10 (red lines). White wines are commonly regarded as either 'dry' or 'sweet' - so perhaps it is worth splitting the whitewines into these two categories for the analysis, split at around residual.sugar = 3 (the orange line)?
+
+```{r echo=TRUE, split_sweetness}
+# creates new sweetnes variable based on residual.sugar content
+whitewine$sweetness <- NA
+whitewine$sweetness <- factor(ifelse(
+                              whitewine$residual.sugar >=3, 'sweet','dry'))
+
+# also adds new dataframes of only sweet or dry white wines
+whitewine.sweet <- whitewine[whitewine$sweetness == 'sweet',]
+whitewine.dry <- whitewine[whitewine$sweetnes == 'dry',]
+```
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#coloured (by sweetness) histrograms of residual sugar
+p1 = ggplot(whitewine, aes(x=residual.sugar, fill = sweetness)) +
+  geom_histogram(bins = 75)
+
+p2 = p1 + scale_x_log10(breaks = c(1,2,3,10,20,30))  +
+  geom_vline(aes(xintercept = 1.3), colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = 10), colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = 3), colour="orange", linetype = 20)
+
+#arrange plots in grid
+grid.arrange(p1,p2, ncol=1)
+
+```
+
+I have created a new variable 'sweetness', with values 'dry' and 'sweet'.  
+**NOTE** Technically this is probably a bivariate plot - I only include it here to clarify the split I have made in the data at this point, as it features in future analysis.
+
+```{r echo=FALSE, sweetness_split_summary}
+# summary stats for separate sweet & dry wine data
+print('whitewine.sweet dataframe')
+summary(whitewine.sweet)
+writeLines('\n\n')
+print('whitewine.dry dataframe')
+summary(whitewine.dry)
+
+```
+
+Let's look at quality again.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=quality.factor, fill = sweetness)) +
+  geom_histogram(stat='count') +
+  facet_wrap(~sweetness, ncol=1)
+  
+```
+
+Quality distribution of sweet and dry whitewines appears similar.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=fixed.acidity, fill = sweetness)) +
+  geom_histogram(binwidth= 0.2) +
+  scale_x_continuous(limits = c(3, 11), breaks = seq (0,15,2)) +
+  geom_vline(aes(xintercept = median(fixed.acidity)), colour="black",
+             linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+
+```
+
+Fixed acidity shows a relatively thin normal distribution about a median of 6.8 (black line), with no noticeable sweet / dry difference. Black line is median fixed.acidity of all wines.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+ggplot(whitewine, aes(x=volatile.acidity,fill = sweetness)) +
+  geom_histogram(binwidth= 0.02) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq (0,1,.2)) +
+  geom_vline(aes(xintercept = median(volatile.acidity)), colour="black",
+             linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+```
+
+Volatile acidity shows a slightly right skewed normal distribution about a median of 0.26 (black line), with a few outliers  at >0.8. Black line is median volatile.acidity of all wines.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=citric.acid, fill = sweetness)) +
+  geom_histogram(binwidth= 0.02) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq (0,1,.2)) +
+  geom_vline(aes(xintercept = 0.49), colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = 0.74), colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = median(citric.acid)), colour="black",
+             linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+
+```
+
+Citric acid shows a generally normal distribution, with an odd peak at c. 0.49, and a smaller one at c. 0.74 (red lines). Black line is median citric.acid of all wines.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=citric.acid)) +
+  geom_histogram(binwidth= 0.005) +
+  scale_x_continuous(limits = c(0.4, 0.6), breaks = seq (0,1,.1)) +
+  geom_vline(aes(xintercept = 0.490), colour="red", linetype = 20) 
+
+```
+
+A 'zoom' into the histogram in this region shows that there certainly appears to be a local 'spike' in the data at citric.acid = 0.49. I wonder if there is some form of target / guideline to aim for 'below 0.5' for citric.acid during the wine making process? (Could this be Goodharts Law in action?). Or alternatively, could this be some measurement artefact?
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=citric.acid)) +
+  geom_histogram(binwidth= 0.005) +
+  scale_x_continuous(limits = c(0.7, 0.8), breaks = seq (0,1,.1)) +
+  geom_vline(aes(xintercept = 0.740), colour="red", linetype = 20) 
+
+```
+
+Zooming in again, There is a similar (though smaller) local 'spike' at 0.74 - again, is there some effect clustering values below a 'round' value of 0.75?
+
+There appears to be some effect causing a local spike in citric.acid at 0.49 and 0.74, just below the 'round' values of 0.5 and 0.75. My suspicion at this point is that 0.5 and 0.75 could be some form of 'target levels' which winemakers aim to be below.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=chlorides, fill = sweetness)) +
+  geom_histogram(bins=100) +
+  scale_x_continuous(limits = c(0, 0.2), breaks = seq (0,0.2,.05)) +
+  geom_vline(aes(xintercept = median(chlorides)), colour="black",
+             linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+
+```
+
+Chlorides show a tight normal distribution about a median of 0.043, with a few outliers above 0.1. Here the dry wines show slightly lower levels of chlorides than sweet wines.  Black line is median chlorides of all wines.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=free.sulfur.dioxide, fill = sweetness)) +
+  geom_histogram(binwidth = 2) +
+  scale_x_continuous(limits = c(0, 125), breaks = seq (0,300,50))+
+  geom_vline(aes(xintercept = median(free.sulfur.dioxide)), colour="black",
+             linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+
+
+```
+
+Free sulfur dioxide shows a (very) slightly right skewed distribution about a median of 34.0. There is a noticeable difference here between sweet and dry, with dry wines showing lower free.sulfur.dioxide. Black line is median free.sulfur.dioxide of all wines.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=total.sulfur.dioxide, fill = sweetness)) +
+  geom_histogram(binwidth = 4)+
+  scale_x_continuous(limits = c(0, 325), breaks = seq (0,500,50))+
+  geom_vline(aes(xintercept = median(total.sulfur.dioxide)), colour="black",
+             linetype = 20)+
+  facet_wrap(~sweetness, ncol=1)
+
+
+```
+
+Total sulfur dioxide shows a more symmetrical normal distribution about a median of 134.0. Again, there is a noticeable difference here between sweet and dry, with dry wines showing lower total.sulfur.dioxide.  Black line is median total.sulfur.dioxide of all wines.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=density, fill = sweetness)) +
+  geom_histogram(binwidth = 0.0005)+
+  scale_x_continuous(limits = c(0.98, 1.01), breaks = seq (0,2,.01))+
+  geom_vline(aes(xintercept = median(density)), colour="black",
+             linetype = 20)+
+  facet_wrap(~sweetness, ncol=1)
+
+
+```
+
+Density shows a normal distribution in a very tight range (mostly 0.99 < density < 1.00). A marked difference between sweet and dry is clear: dry wines are lower density.  Black line is median density of all wines.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=pH, fill = sweetness)) +
+  geom_histogram(binwidth = 0.03) +
+  scale_x_continuous(limits = c(2.7, 3.7), breaks = seq (0,14,.1)) +
+  geom_vline(aes(xintercept = median(pH)), colour="black", linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+
+```
+
+pH shows a 'very' neat normal distribution around a median (all wines) of 3.18 (black line).  
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(whitewine, aes(x=sulphates, fill = sweetness)) +
+  geom_histogram(binwidth = 0.02) +
+    scale_x_continuous(limits = c(0.2, 1.0), breaks = seq (0,2,.2))+
+  geom_vline(aes(xintercept = median(sulphates)), colour="black",
+             linetype = 20) +
+  facet_wrap(~sweetness, ncol=1)
+
+
+```
+
+Sulphates show a slightly right skewed distribution around a median (all wines) of 0.47.  
+
+
+
+```{r echo=FALSE, Univariate_Plots_14}
+ggplot(whitewine, aes(x=alcohol)) +
+  geom_histogram(binwidth = 0.1)+
+    scale_x_continuous(limits = c(8, 15), breaks = seq (0,20,1)) +
+  geom_vline(aes(xintercept = median(alcohol)), colour="black",
+             linetype = 20)
+                 
+```
+
+Alcohol shows a more 'spread' distribution, with median of 10.4. And a clear difference between sweet and dry wines. Let's look at them separately.  
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE,Univariate_Plots_15}
+ggplot(whitewine, aes(x=alcohol, fill = sweetness)) +
+  geom_histogram(binwidth = 0.1) +
+  facet_wrap(~sweetness, ncol=1) +
+  theme(legend.position = 'right') +
+    geom_vline(aes(xintercept = median(alcohol)), colour="black",
+             linetype = 20)
+
+```
+
+Dry wines now a more symmetrical normal distribution , while sweet wines show a noticeable 'right skew'. Black line is median alcohol of all wines. 
+
+
+
+# Univariate Analysis
+
+#### What is the structure of your dataset?
+The data contains data on 11 chemical parameters and a expert quality assessment (on a scale of 1-10) for  4,898 white wines. All of the chemical parameters are measurements on a continuous scale. The quality score is integers (only) from 1-10, and only scores from 3-9 are observed, so for some aspects of this analysis it makes sense to consider quality as an ordered factor varaible.
+
+Most wines have a quality score of 5-7, with few scoring either very high (quality.factor = 9) or very low (quality.factor = 3) quality scores.
+
+Most of the chemical parameters show normal or slightly skewed distributions, with a few exceptions worth noting:
+
+* citric.acid has two 'local' maxima / spikes in distribution at 0.49 and 0.74
+* residual.sugar (viewed on a log scale) shows a bimodal distribution
+* alcohol shows a broad distribution
+
+
+#### What is/are the main feature(s) of interest in your dataset?
+Based on the bimodal distribution of residual.sugar, and knowledge that white wines are conventionally classified as 'sweet' or 'dry' based on sugar / sweeteness, it makes sense to classify the population into sweet and dry wines (at residual.sugar >3 or <3), and see how the analyses & correlations vary between these two sets. The sulfur.dioxide variables (free. and total.) both show differences between sweet and dry wines, as do density and alcohol.
+
+#### What other features in the dataset do you think will help support your \
+investigation into your feature(s) of interest?
+I certainly think it will be useful to consider the difference between the sweet and dry wines for future analysis. At this it is hard to know what variables or correlations will prove most useful.
+
+
+#### Did you create any new variables from existing variables in the dataset?
+It appears worthwhile to add a 'quality.factor' variable - for views where quality is more usefully considered as a factor in subsequent plots.
+
+I also added a 'sweetness' variable, to split the data up into 'sweet' and 'dry' wines (at residual.sugar >3 or <3).
+
+#### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+I used a log_10 scale for the residual sugar to highlight the bimodality of the distribution, and enable the splitting between sweet and dry.
+
+
+# Bivariate Plots Section  
+
+Let's start by looking at the correlation matrix for the whole dataset.
+
+```{r echo=FALSE, Bivariate_Plots}
+# using corrplot package to create more attractive correlation grids
+m <- cor(whitewine[c(13, 2:12)])
+corrplot(m, method = 'square')
+```
+
+```{r echo=FALSE, Bivariate_Plots1}
+corrplot(m, method = 'number', number.cex = 0.65)
+```
+
+An initial look at a correlation matrix indicates a few areas of interest:
+
+* There is a strong (-0.78) negative correlation between alcohol and density, and quite some correlations between alcohol and residual.sugar (-0.45).
+* Unsurprisingly, pH shows a negative association (-0.43) with fixed.acidity (low pH means acidic by definition).
+* Density shows a strong positive correlation (0.84) with residual.sugar, and some correlation (0.53) with total.sulfur.dioxide.
+* The strongest correlations shown quality are with alcohol (0.44) and density (-0.31).
+* total.sulfur.dioxide and free.sulfur.dioxide correlate (0.62) with each other.
+  
+I thought it might also be interesting to see where the correlation matrices show the **greatest differences** when evaluated separately for the 'sweet' and 'dry' white wines:
+
+
+```{r echo=TRUE, Bivariate_Plots2}
+# calculating the 'difference' between the correlation matrices for 
+# sweet and dry wines
+m.sweet <- cor(whitewine.sweet[c(13, 2:12)])
+m.dry <- cor(whitewine.dry[c(13, 2:12)])
+
+m.diff <-  m.sweet - m.dry
+
+m.diff
+
+```
+
+If we look for the largest differences:
+
+* \>0.75 difference: density / residual.sugar
+* \>0.5 difference: residual.sugar / alcohol
+* \>0.25 difference residual.sugar / quality; chlorides / citric.acid; alcohol / free.sulfur.dioxide;
+    density / free.sulfur.dioxide  
+    
+It is probably not surprising that the greatest differences are in correlations involving residual.sugar, as this is the dimension we have used to 'split' the dataset. But it will be interesting to view these different relationships across sweet vs. dry wines in the analysis below.  
+
+
+```{r echo=FALSE, Bivariate_Plots3}
+
+
+ggpairs(whitewine[,c(14,2:6)], 
+        lower = list(continuous = wrap('points', alpha=0.5, size = 0.1), 
+                     combo=wrap('facetdensity')), 
+        upper = list(continuous = wrap('cor', size=4),
+                     combo = wrap('box', size=0.3, outlier.size = 0.1)),
+        axisLabels = 'show') +
+  theme(axis.text.x = element_text(angle=90, vjust=1, hjust=1,size = 2), 
+        axis.text.y = element_text(size=6),
+        strip.text = element_text(size=8))
+
+
+```
+
+```{r echo=FALSE, Bivariate_Plots4}
+ggpairs(whitewine[,c(14,7:12)], 
+        lower = list(continuous = wrap('points', alpha=0.5, size = 0.1),
+                     combo=wrap('facetdensity')),
+        upper = list(continuous = wrap('cor', size=4), 
+                     combo = wrap('box', size=0.3, outlier.size = 0.1)),
+        axisLabels = 'show') +
+  theme(axis.text.x = element_text(angle=90, vjust=1, hjust=1,size = 2), 
+        axis.text.y = element_text(size=6),
+        strip.text = element_text(size=8))
+```
+
+A review of the 'pair plot' matrix (split into 2, and using quality as a factor in each), highlights a few features worth investigating:  
+
+* Looking at the boxplots for quality.factor, alcohol, pH and density appear to show some clear relationships to quality. But these plots are probably worth examining at a larger size (and better scale).
+* density seems to show linear variation with alcohol and total.sulfur.dioxide  
+  
+Let's look at the boxplots vs. quality.factor in more detail.  
+
+**NOTE** It is important to remember in considering the plots below that only a small number of wines show quality scores of 9 (5 wines) or 3 (20 wines). So interpretation of the plots should focus principally on the quality.factor range 4-8.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+COLUMNS <- colnames(whitewine)[2:12]
+
+showBoxplt <- function(df, y, x='quality.factor', lower=0.01, upper=0.98) {
+  ggplot(df, aes_string(x=x, y=y)) + 
+    geom_boxplot(size = 0.4, outlier.size = 0.1)+ 
+    ylim(quantile(df[, y], prob=lower), 
+         quantile(df[, y], prob=upper)) +
+      theme(axis.text.x = element_text(size = 6), 
+        axis.text.y = element_text(size=6),
+        axis.title.x = element_text(size=8),
+        axis.title.y = element_text(size=8))
+
+}
+boxp1 <- lapply(COLUMNS, FUN=function(var) showBoxplt(whitewine, var))
+do.call(grid.arrange, args=c(boxp1, list(ncol=4)))
+
+
+
+```
+
+Looking again (at a slightly greater scale) at boxplots of the various chemical parameters across quality scores. An initial look suggests that density and alcohol and chlorides show the clearest and most consistrent trends with quality. It is worth examining some of these parameters more closely, and see  how the quality relationship might vary between sweet and dry whitewines.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+y.data = whitewine$density
+y.label = 'density'
+
+ggplot(whitewine, aes( x = quality.factor, y = density) ) + 
+               geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+               geom_boxplot(alpha = 0.5, aes(fill = sweetness), 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                            quantile(y.data, prob = 0.99))) +
+              ylab(y.label) +
+  facet_wrap(~sweetness)
+
+
+
+```
+
+Density shows a clear nagative trend with quality for both dry and sweet, but the variation across quality is more pronounced for the sweet wines. And there is a clear variation between optimal densities for sweet vs. dry white wines.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+y.data = whitewine$alcohol
+y.label = 'alcohol'
+
+ggplot(whitewine, aes( x = quality.factor, y = alcohol) ) + 
+               geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+               geom_boxplot(alpha = 0.5, aes(fill = sweetness), 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                            quantile(y.data, prob = 0.99))) +
+              ylab(y.label) +
+  facet_wrap(~sweetness)
+
+
+```
+
+Alcohol shows a broadly positive correlation with quality for both sweet and dry wines, but the relationship appears more pronounced for sweet wines.  
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$chlorides
+y.label = 'chlorides'
+
+ggplot(whitewine, aes( x = quality.factor, y = chlorides) ) + 
+               geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+               geom_boxplot(alpha = 0.5, aes(fill = sweetness), 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(y.data, prob = 0.01),
+                                            quantile(y.data, prob = 0.95))) +
+              ylab(y.label) +
+  facet_wrap(~sweetness)
+
+
+```
+
+Chlorides do indeed show a (negative) correlation with quality, at slightly lower levels for dry wines than for sweet.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#y.data = whitewine$residual.sugar
+#y.label = 'residual.sugar'
+
+p1 <- ggplot(whitewine.dry, aes( x = quality.factor, y = residual.sugar) ) + 
+               geom_jitter(alpha = 0.4, colour = '#f8766d') +
+               geom_boxplot(alpha = 0.5, fill = '#f8766d', 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(whitewine.dry$residual.sugar, prob = 0.01),
+                                            quantile(whitewine.dry$residual.sugar, prob = 0.99))) +
+              ylab(y.label) + facet_wrap(~sweetness)
+
+p2 <- ggplot(whitewine.sweet, aes( x = quality.factor, y = residual.sugar) ) + 
+               geom_jitter(alpha = 0.4, colour = '#07bfc4') +
+               geom_boxplot(alpha = 0.5, fill = '#07bfc4', 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(whitewine.sweet$residual.sugar, prob = 0.01),
+                                            quantile(whitewine.sweet$residual.sugar, prob = 0.99))) +
+              ylab(y.label) + facet_wrap(~sweetness)
+
+#arrange plots in grid
+grid.arrange(p1,p2, ncol=2)
+
+```
+
+As the basis for the separation between dry & sweet, clearly residual sugar shows very different quality variation across the two groups. The trend for sweet whitewines is slightly negative: higher quality wines have less residual.sugar.  However for dry whitewines, the trend is reversed - with higher quality wines showing slightly higher levels of residual.sugar.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$total.sulfur.dioxide
+y.label = 'total.sulfur.dioxide'
+
+ggplot(whitewine, aes( x = quality.factor, y = total.sulfur.dioxide) ) + 
+               geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+               geom_boxplot(alpha = 0.5, aes(fill = sweetness), 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                            quantile(y.data, prob = 0.99))) +
+              ylab(y.label) +
+  facet_wrap(~sweetness)
+
+
+```
+
+Total.sulfur.dioxide shows a clear negative trend agains increasing quality for sweet wines, but a much less pronounced trend for dry wines.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$sulphates
+y.label = 'sulphates'
+
+ggplot(whitewine, aes( x = quality.factor, y = sulphates) ) + 
+               geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+               geom_boxplot(alpha = 0.5, aes(fill = sweetness), 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                            quantile(y.data, prob = 0.95))) +
+              ylab(y.label) +
+  facet_wrap(~sweetness)
+
+
+```
+
+The trend of sulphates with quality is slight, but does appear to be positive for dry wines and negative for sweet wines.  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$pH
+y.label = 'pH'
+
+ggplot(whitewine, aes( x = quality.factor, y = pH) ) + 
+               geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+               geom_boxplot(alpha = 0.5, aes(fill = sweetness), 
+                            outlier.size = 0.6) +
+              scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                            quantile(y.data, prob = 0.95))) +
+              ylab(y.label) +
+  facet_wrap(~sweetness)
+
+
+```
+
+There is little consistent variation in pH with quality for sweet wines, but a very clear positive correlation for dry wines (higher pH means better wine).  
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$density
+y.label = 'density'
+x.data = whitewine$alcohol
+x.label = 'alcohol'
+
+
+ggplot(whitewine, aes(x = alcohol, y =  density, colour = sweetness)) +
+  geom_point(alpha = 0.2) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'loess') +
+  xlab(x.label) + ylab(y.label) +
+  facet_wrap(~sweetness)
+
+```
+
+Alcohol and density show a clear nagative correlation, and also a clear separation between sweet and dry wines (dry wines generally having lower density for a given alcohol level).  
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$density
+y.label = 'density'
+x.data = whitewine$residual.sugar
+x.label = 'residual.sugar'
+
+
+p1 <-  ggplot(whitewine.dry, aes(x = residual.sugar, y =  density, 
+                                 colour = sweetness)) +
+  geom_point(alpha = 0.2 , colour = '#f8766d') +
+  scale_x_continuous(limits = c(quantile(whitewine.dry$residual.sugar,
+                                         prob = 0.01), 
+                                quantile(whitewine.dry$residual.sugar, 
+                                         prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'lm', colour = '#f8766d') +
+  xlab(x.label) + ylab(y.label) + facet_wrap(~sweetness)
+
+p2 <- ggplot(whitewine.sweet, aes(x = residual.sugar, y =  density, 
+                                  colour = sweetness)) +
+  geom_point(alpha = 0.2 , colour = '#07bfc4') +
+  scale_x_continuous(limits = c(quantile(whitewine.sweet$residual.sugar, 
+                                         prob = 0.01), 
+                                quantile(whitewine.sweet$residual.sugar, 
+                                         prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'lm', colour = '#07bfc4') +
+  xlab(x.label) + ylab(y.label) + facet_wrap(~sweetness)
+
+grid.arrange (p1, p2, ncol = 2)
+
+```
+
+There is a clear positive correlation between residual.sugar and density for sweet wines, but no indication of any significant correlation for dry wines (albeit with a restricted range of residual.sugar).  
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$density
+y.label = 'density'
+x.data = whitewine$fixed.acidity
+x.label = 'fixed.acidity'
+
+
+ggplot(whitewine, aes(x = fixed.acidity, y =  density, colour = sweetness)) +
+  geom_point(alpha = 0.2) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'lm') +
+  xlab(x.label) + ylab(y.label) +
+  facet_wrap(~sweetness)
+
+```
+
+Fixed.acidity shows a slight positive correlation with density, and also a reasonable separation between sweet and dry wines (dry wines are generally lower density for a given fixed.acidity).  
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$alcohol
+y.label = 'alcohol'
+x.data = whitewine$residual.sugar
+x.label = 'residual.sugar'
+
+
+p1 <-  ggplot(whitewine.dry, aes(x = residual.sugar, y =  alcohol, 
+                                 colour = sweetness)) +
+  geom_point(alpha = 0.2 , colour = '#f8766d') +
+  scale_x_continuous(limits = c(quantile(whitewine.dry$residual.sugar,
+                                         prob = 0.01), 
+                                quantile(whitewine.dry$residual.sugar, 
+                                         prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'lm', colour = '#f8766d') +
+  xlab(x.label) + ylab(y.label) + facet_wrap(~sweetness)
+
+p2 <- ggplot(whitewine.sweet, aes(x = residual.sugar, y =  alcohol, 
+                                  colour = sweetness)) +
+  geom_point(alpha = 0.2 , colour = '#07bfc4') +
+  scale_x_continuous(limits = c(quantile(whitewine.sweet$residual.sugar, 
+                                         prob = 0.01), 
+                                quantile(whitewine.sweet$residual.sugar, 
+                                         prob = 0.999))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'lm', colour = '#07bfc4') +
+  xlab(x.label) + ylab(y.label) + facet_wrap(~sweetness)
+
+grid.arrange (p1, p2, ncol = 2)
+```
+
+The trends for residual.sugar vs. alcohol are less clear, but regression lines show different slope directions in sweet vs. dry wines.  
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y.data = whitewine$free.sulfur.dioxide
+y.label = 'free.sulfur.dioxide'
+x.data = whitewine$total.sulfur.dioxide
+x.label = 'total.sulfur.dioxide'
+
+
+ggplot(whitewine, aes(x = total.sulfur.dioxide, y =  free.sulfur.dioxide, colour = sweetness)) +
+  geom_point(alpha = 0.2) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  geom_smooth(method = 'lm') +
+  xlab(x.label) + ylab(y.label) +
+  facet_wrap(~sweetness)
+
+```
+
+There is some positive correlation between total.sulfur.dioxide and free.sulfur.dioxide, but no clear separation between dry and sweet wines.
+
+
+
+
+# Bivariate Analysis
+
+
+#### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+It is now clear from this analysis that it does make sense to consider the data for sweet and dry white wines separately when looking at some of the relationships. The strength / level of effect of certain variables on quality can vary between the two groups, and may even be ina reverse direction.  
+
+* Density shows a clear negative correlation with quality (better wines are less dense). The effect is more pronounced for sweet wines than dry wines, which tend to have higher densities.
+* Alcohol shows a positive correlation with quality (more alcoholic wines are better). But over the 'core' quality range of most wines (5-7), the effect is more pronounced for sweet wines.
+* Chlorides show a negative correlation with quality, a trend slightly more pronounced for sweet wines.
+* Residual.sugar shows a slight negative correlation with quality for sweet wines (less sweet is better), but for dry wines the relationship is reversed (sweeter 'dry' wines are better).
+* Total.sulfur.dioxide shows a clear negative correlation with quality for sweet wines, but limited variation for dry wines.
+* pH shows a clear positive correlation with quality for dry wines (better wines have higher pH), but little variation with quality for sweet wines.
+
+
+#### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+Density and alcohol correlate well (negatively) with each other for both sweet and dry wines, but with a clear separation between the datasets (sweet wines are higher density at given alcohol).  
+
+Residual.sugar shows a clear positive correlation with density for sweet wines (sweeter wines are denser), but no clear relationship is seen for dry wines. This may be a by product of the restriced range of residual.sugar for dry wines (<3) based on the definition of 'dry' wines, but the lack of any correlation at all is striking.  
+
+Fixed.acidity also shows a positive correlatio with density for both sets of wines, again with good separation between the datasets (sweet wines are denser at a givem fixed.acidity)
+
+#### What was the strongest relationship you found?
+
+* The strongest relationship for quality is with alcohol
+* The strongest relationship between other features is between density and alcohol. 
+
+
+
+# Multivariate Plots Section
+
+There are only a few wines with quality scores <4 or >8, and they make insights harder to visualise on some plots, so for this section I will create a new set of 'clipped' data, with quality scores of 3 and 9 removed.
+(NOTE there are only 5 wines of quality 9 and 20 of quality 3 out of 4,898 wines in the data)
+
+```{r, message=FALSE, warning=FALSE}
+
+whitewine.sweet.clip <- whitewine.sweet[whitewine.sweet$quality.factor != 3 
+                                      & whitewine.sweet$quality.factor != 9 ,]
+whitewine.dry.clip <- whitewine.dry[whitewine.dry$quality.factor != 3 
+                                       & whitewine.dry$quality.factor != 9 ,]
+whitewine.clip <- whitewine[whitewine$quality.factor != 3 
+                                      & whitewine$quality.factor != 9 ,]
+
+```
+
+
+
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+data = whitewine.dry.clip
+x.data = data$alcohol
+x.label = 'alcohol'
+y.data = data$density
+y.label = 'density'
+pl.title = 'Dry wines (residual.sugar <3)'
+
+
+ggplot(data, aes(x = alcohol, y =  density, colour = quality.factor)) +
+  geom_point(alpha = 0.7) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  xlab(x.label) + ylab(y.label) + 
+  scale_colour_brewer(type = 'div')+
+  theme(legend.position = 'right') +
+  ggtitle(pl.title) 
+
+```
+
+Considering dry wines, it is clear that quality generally improves as alcohol increases and density decreases.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+data = whitewine.sweet.clip
+x.data = data$alcohol
+x.label = 'alcohol'
+y.data = data$density
+y.label = 'density'
+pl.title = 'Sweet wines (residual.sugar >3)'
+
+
+ggplot(data, aes(x = alcohol, y =  density, colour = quality.factor)) +
+  geom_point(alpha = 0.9) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  xlab(x.label) + ylab(y.label) + 
+  scale_color_brewer(type = 'div') +
+  theme(legend.position = 'right') +
+    scale_colour_brewer(type = 'div')+
+  ggtitle(pl.title) 
+
+```
+
+And a similar relationship can be seen in sweet wines.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+data = whitewine.clip
+x.data = data$alcohol
+x.label = 'alcohol'
+y.data = data$density
+y.label = 'density'
+pl.title = 'All wines'
+
+
+ggplot(data, aes(x = alcohol, y =  density, colour = quality.factor)) +
+  geom_point(alpha = 0.9) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  xlab(x.label) + ylab(y.label) + 
+  scale_color_brewer(type = 'div') +
+  theme(legend.position = 'right') +
+  ggtitle(pl.title) +
+    scale_colour_brewer(type = 'div')+
+  facet_wrap(~sweetness, ncol = 1)
+
+```
+
+Comparing the two plots, the pattern is the same across both - with the sweet wines showing a generally higher density.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+data = whitewine.dry.clip
+x.data = data$density
+x.label = 'density'
+y.data = data$pH
+y.label = 'pH'
+pl.title = 'Dry wines (residual.sugar <3)'
+
+
+ggplot(data, aes(x = density, y =  pH, colour = quality.factor)) +
+  geom_point(alpha = 0.9) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  xlab(x.label) + ylab(y.label) + 
+  scale_color_brewer(type = 'div') +
+  theme(legend.position = 'right') +
+    scale_colour_brewer(type = 'div')+
+  ggtitle(pl.title) 
+
+```
+
+Looking at other parameters, for dry wines it would appear that for a given density, a higher pH is likely to be a better wine, though the relationship is not strong.
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+data = whitewine.sweet.clip
+x.data = data$alcohol
+x.label = 'alcohol'
+y.data = data$residual.sugar
+y.label = 'residual.sugar'
+pl.title = 'Sweet wines (residual.sugar >3)'
+
+
+ggplot(data, aes(x = alcohol, y =  residual.sugar, colour = quality.factor)) +
+  geom_point(alpha = 0.9) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  xlab(x.label) + ylab(y.label) + 
+  scale_color_brewer(type = 'div') +
+  theme(legend.position = 'right') +
+    scale_colour_brewer(type = 'div')+
+  ggtitle(pl.title) 
+
+```
+
+A similar pattern is harder to find for sweet wines, buy there does appear to be indication that wines with higher residual.sugar need to also have higher alcohol levels to be a high quality.
+
+
+
+
+# Multivariate Analysis
+
+#### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+The correlation between density and alcohol appears valuable in contributing to quality. For both sweet and dry wine datasets, quality tends to increase as alcohol rises and density decreases. Separating the date into sweet and dry datasets allows this relationship to be more clearly seen.
+
+Other variables that reinforce the quality.factor are harder to discern, but it does appear that for dry wines, higher pH (at a given density) might be a useful indicator, and for sweet wines higher residual.sugar (at a given alcohol) might also be a useful indicator.
+
+#### Were there any interesting or surprising interactions between features?  
+
+Nothing that I thought was particularly surprising.
+
+
+#### OPTIONAL: Did you create any models with your dataset? Discuss the \
+strengths and limitations of your model.  
+
+I didn't create any models, but it does seem likely that model accuracy would be higher if the sweet and dry wines were considered and modelled separately.
+
+------
+
+# Final Plots and Summary
+
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+
+p1 = ggplot(whitewine, aes(x=residual.sugar, fill = sweetness)) +
+  geom_histogram(bins = 75) + 
+  xlab(expression(paste('residual.sugar (g/',dm^{3},')'))) +
+  theme(legend.position = 'right', legend.key.size = unit(0.8,'line'),
+        legend.text = element_text(size=8)  )
+
+p2 = p1 + scale_x_log10() +
+  geom_vline(aes(xintercept = median(whitewine.dry$residual.sugar)), 
+             colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = median(whitewine.sweet$residual.sugar)), 
+             colour="red", linetype = 20) +
+  geom_vline(aes(xintercept = 3), colour="orange", linetype = 20) +
+  xlab(expression(paste('residual.sugar (g/',dm^{3},')(log_10 scale)'))) +
+  annotate("text", x = median(whitewine.sweet$residual.sugar)+8, y = 205,
+           label = "Sweet wine median = 8.4", colour = 'red', size=3) +
+  annotate("text", x = median(whitewine.dry$residual.sugar)-0.7, y = 205,
+           label = "Dry wine median = 1.5", colour = 'red', size=3)  +
+  annotate("text", x = 4.5, y = 175,
+           label = "Divide data at 3", colour = 'orange', size=3) 
+
+#arrange plots in grid
+grid.arrange(p1,p2, ncol=1, 
+  top='Distribution of residual.sugar in sweet and dry white wines')  
+
+
+#grid.text("MAIN TITLE", vp = viewport(layout.pos.row = 1,
+# layout.pos.col = 1:2))
+
+
+```
+
+#### Description One
+A histogram of residual.sugar, expanded to a log_10 scale, shows the clear bimodal distribution of residual sugar, and the division of the data into 'sweet' and 'dry' wines at residual.sugar = 3
+
+
+### Plot Two
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+y.data = whitewine$density
+y.label = (expression(paste('density (g/',dm^{3},')')))
+
+ggplot(whitewine, aes( x = quality.factor, y = density) ) + 
+  geom_jitter(alpha = 0.4, aes(colour = sweetness)) +
+  geom_boxplot(alpha = 0.5, aes(fill = sweetness), outlier.size = 0.6) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  ylab(y.label) +
+  theme(legend.position = 'right') +
+  ggtitle('Variation of density with quality for sweet and dry white wines')
+              
+
+ #xlab(expression(paste('residual.sugar (g/',dm^{3},')'))) 
+
+```
+
+
+#### Description Two
+A view of of density (and density distribution) varies with quality, for sweet and dry wines. Both sweet and dry wines show a clear trend of decreasing density with increasing quality, but at different levels of absolute density for sweet vs. dry wines. Dry wines are generally less dense and show a lower IQR than sweet wines of the same quality. And the variation in average density between  'good' (quality = 8), and bad (quality = 4) dry wines is smaller than the average density variation between the same quality levels for sweet wines.
+
+
+### Plot Three
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+
+data = whitewine.clip
+x.data = data$alcohol
+x.label = 'alcohol (% by volume)'
+y.data = data$density
+y.label = (expression(paste('density (g/',dm^{3},')')))
+pl.title = 'Variation of quality with density and alcohol'
+pl.sub = 'For dry and sweet wines'
+
+
+ggplot(data, aes(x = alcohol, y =  density, colour = quality.factor)) +
+  geom_point(alpha = 0.8) +
+  scale_x_continuous(limits = c(quantile(x.data, prob = 0.01), 
+                                quantile(x.data, prob = 0.99))) +
+  scale_y_continuous(limits = c(quantile(y.data, prob = 0.01), 
+                                quantile(y.data, prob = 0.99))) +
+  xlab(x.label) + ylab(y.label) + 
+  scale_color_brewer(type = 'div') +
+  theme(legend.position = 'right') +
+  ggtitle(pl.title, subtitle = pl.sub) +
+    scale_colour_brewer(type = 'div')+
+  facet_wrap(~sweetness, ncol = 1)
+
+```
+
+#### Description Three  
+For both dry and sweet white wines, there is a clear pattern that quality improves as alcohol increases and density falls. The distributions for sweet vs. dry are separate but overlapping (sweet wines are denser at a given alcohol), and so it is clearer to view them separately.
+
+
+------
+
+# Reflection
+
+This has been an interesting exercise in 'getting under the skin' of an unfamiliar dataset, and trying to extract and discern trends and relationships within it.
+
+I spent sometime looking at the various analyses before the insight came to me that it could be instructive to separate the data into 'sweet' and 'dry' wines, and view them separately. The bimodality of the residual.sugar distribution, and knowledge that white wines are commonly classified as 'sweet' or 'dry' made this feel like a reasonable step. And it does appear that winemakers are driving different aspects of the wines chemistry to make a 'good' sweet wine vs.a  good 'dry' wine.
+
+Once it was clear from the histrograms of total.sulful.dioxide and density that there clearly were other differences between the sweet and dry wines, I felt more confident in the decision to consider them separately.
+
+From the Univriate analysis, a feature of interest was certainly the slightly anomalous 'spikes' in distribution of citric.acid at 0.49 and 0.74. The fact that these are just below some 'round' levels (of 0.5 and 0.75) still leaves me thinking there is some sort ot targetting citric.acid below these levels during the wine making process. But I suspect that bringing further insight to this anomaly would need further research and more data than is available in this dataset. And so is outside the scope of this work.
+
+It was disappointing, perhaps, not to see any really strong and clear correlations (especially with quality). But I guess that's what 'real world data' is like. Separating out to sweet and dry did seem to bring out some clarity though, and it became clear looking at the bivariate plots that factors that drive higher quality for sweet wines are certainly not exactly the same as those for dry wines. Alcohol and density remain the strongest drivers of quality for both (but at different levels), but more secondary factors (pH, residual.sugar) clearly vary between the two types.
+
+It seems clear to me that modelling of this data (for quality) is likely to be much more effective if done separately for sweet vs. dry wines. And it could therefore be worth investigating in more detail how to improve this division (perhaps a combination of factors, rather than residual.sugar alone?).
